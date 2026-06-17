@@ -633,6 +633,10 @@ var DABsToTerraformWrapperFields = map[string]FieldSet{
 		"create_database_if_missing": {},
 		"postgres_database":          {},
 	},
+	"postgres_databases": {
+		"postgres_database": {},
+		"role":              {},
+	},
 	"postgres_endpoints": {
 		"autoscaling_limit_max_cu": {},
 		"autoscaling_limit_min_cu": {},
