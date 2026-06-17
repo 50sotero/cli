@@ -12,7 +12,6 @@ import (
 	"github.com/databricks/cli/bundle/config"
 	"github.com/databricks/cli/bundle/env"
 	"github.com/databricks/cli/libs/cmdio"
-	"github.com/databricks/cli/libs/diag"
 	"github.com/databricks/cli/libs/exec"
 	"github.com/databricks/cli/libs/log"
 )
@@ -31,7 +30,7 @@ func (m *script) Name() string {
 	return fmt.Sprintf("scripts.%s", m.scriptHook)
 }
 
-func (m *script) Apply(ctx context.Context, b *bundle.Bundle) diag.Diagnostics {
+func (m *script) Apply(ctx context.Context, b *bundle.Bundle) error {
 	command := getCommand(b, m.scriptHook)
 	if command == "" {
 		log.Debugf(ctx, "No script defined for %s, skipping", m.scriptHook)
@@ -40,12 +39,12 @@ func (m *script) Apply(ctx context.Context, b *bundle.Bundle) diag.Diagnostics {
 
 	executor, err := exec.NewCommandExecutor(b.BundleRootPath)
 	if err != nil {
-		return diag.FromErr(err)
+		return err
 	}
 
 	cmd, out, err := executeHook(ctx, executor, command)
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to execute script: %w", err))
+		return fmt.Errorf("failed to execute script: %w", err)
 	}
 
 	cmdio.LogString(ctx, fmt.Sprintf("Executing '%s' script", m.scriptHook))
@@ -63,7 +62,7 @@ func (m *script) Apply(ctx context.Context, b *bundle.Bundle) diag.Diagnostics {
 
 	err = cmd.Wait()
 	if err != nil {
-		return diag.FromErr(fmt.Errorf("failed to execute script: %w", err))
+		return fmt.Errorf("failed to execute script: %w", err)
 	}
 
 	return nil

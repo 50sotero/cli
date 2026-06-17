@@ -18,12 +18,10 @@ import (
 	"github.com/databricks/cli/bundle/direct"
 	"github.com/databricks/cli/bundle/direct/dstate"
 	"github.com/databricks/cli/bundle/env"
-	"github.com/databricks/cli/libs/diag"
 	"github.com/databricks/cli/libs/dyn"
 	"github.com/databricks/cli/libs/dyn/dynvar"
 	"github.com/databricks/cli/libs/filer"
 	"github.com/databricks/cli/libs/log"
-	"github.com/databricks/cli/libs/logdiag"
 	"github.com/databricks/cli/libs/structs/structaccess"
 	"github.com/databricks/cli/libs/structs/structpath"
 )
@@ -44,7 +42,7 @@ func (m *uploadStateForYamlSync) Name() string {
 	return "statemgmt.UploadStateForYamlSync"
 }
 
-func (m *uploadStateForYamlSync) Apply(ctx context.Context, b *bundle.Bundle) diag.Diagnostics {
+func (m *uploadStateForYamlSync) Apply(ctx context.Context, b *bundle.Bundle) error {
 	if m.engine.IsDirect() {
 		return nil
 	}
@@ -147,9 +145,8 @@ func (m *uploadStateForYamlSync) convertState(ctx context.Context, b *bundle.Bun
 	// Apply SecretScopeFixups so the config matches what the direct engine expects.
 	// This adds MANAGE ACL for the current user to all secret scopes, ensuring
 	// the migrated state and config agree on .permissions entries.
-	bundle.ApplyContext(ctx, b, resourcemutator.SecretScopeFixups(engine.EngineDirect))
-	if logdiag.HasError(ctx) {
-		return false, errors.New("failed to apply secret scope fixups")
+	if err := bundle.ApplyContext(ctx, b, resourcemutator.SecretScopeFixups(engine.EngineDirect)); err != nil {
+		return false, fmt.Errorf("failed to apply secret scope fixups: %w", err)
 	}
 
 	// Get the dynamic value from b.Config and reverse the interpolation.
@@ -197,9 +194,12 @@ func (m *uploadStateForYamlSync) convertState(ctx context.Context, b *bundle.Bun
 		return false, fmt.Errorf("upgrading state for apply: %w", err)
 	}
 
-	deploymentBundle.Apply(ctx, b.WorkspaceClient(ctx), plan, direct.MigrateMode(true))
+	applyErr := deploymentBundle.Apply(ctx, b.WorkspaceClient(ctx), plan, direct.MigrateMode(true))
 	if _, err := deploymentBundle.StateDB.Finalize(ctx); err != nil {
 		return false, err
+	}
+	if applyErr != nil {
+		return false, applyErr
 	}
 
 	return true, nil

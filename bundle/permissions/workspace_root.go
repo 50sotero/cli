@@ -8,7 +8,6 @@ import (
 	"github.com/databricks/cli/bundle"
 	"github.com/databricks/cli/bundle/libraries"
 	"github.com/databricks/cli/bundle/paths"
-	"github.com/databricks/cli/libs/diag"
 	"github.com/databricks/databricks-sdk-go/service/workspace"
 	"golang.org/x/sync/errgroup"
 )
@@ -24,13 +23,8 @@ func (*workspaceRootPermissions) Name() string {
 }
 
 // Apply implements bundle.Mutator.
-func (*workspaceRootPermissions) Apply(ctx context.Context, b *bundle.Bundle) diag.Diagnostics {
-	err := giveAccessForWorkspaceRoot(ctx, b)
-	if err != nil {
-		return diag.FromErr(err)
-	}
-
-	return nil
+func (*workspaceRootPermissions) Apply(ctx context.Context, b *bundle.Bundle) error {
+	return giveAccessForWorkspaceRoot(ctx, b)
 }
 
 func giveAccessForWorkspaceRoot(ctx context.Context, b *bundle.Bundle) error {
