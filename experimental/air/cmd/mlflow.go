@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/databricks/cli/libs/log"
@@ -76,51 +77,93 @@ func mlflowLogsURL(host string, ids *mlflowIdentifiers) string {
 		strings.TrimRight(host, "/"), ids.ExperimentID, ids.RunID)
 }
 
-// mlflowExperimentURL links to the MLflow experiment page; mlflowRunURL links to
-// the run page. These back the Experiment and MLflow Run hyperlinks in text mode.
-func mlflowExperimentURL(host string, ids *mlflowIdentifiers) string {
-	return fmt.Sprintf("%s/ml/experiments/%s", strings.TrimRight(host, "/"), ids.ExperimentID)
-}
-
+// mlflowRunURL links to the MLflow run page; it backs the MLflow Run hyperlink
+// in the single-run view.
 func mlflowRunURL(host string, ids *mlflowIdentifiers) string {
 	return fmt.Sprintf("%s/ml/experiments/%s/runs/%s",
 		strings.TrimRight(host, "/"), ids.ExperimentID, ids.RunID)
 }
 
-// mlflowRunLabel returns the MLflow run's human-readable name to use as the
-// hyperlink text, falling back to "...{last 8 of run id}" when the name can't be
-// fetched. Mirrors Python's _get_mlflow_run_name (cli_display.py).
-func mlflowRunLabel(ctx context.Context, w *databricks.WorkspaceClient, mlflowRunID string) string {
-	if name := fetchMLflowRunName(ctx, w, mlflowRunID); name != "" {
-		return name
-	}
-	if len(mlflowRunID) > 8 {
-		return "..." + mlflowRunID[len(mlflowRunID)-8:]
-	}
-	return "..." + mlflowRunID
+// maxStepsParam is the MLflow run parameter that records a training run's target
+// step count. It is the denominator of the progress bar; the numerator is the
+// highest step the run has logged a metric at.
+const maxStepsParam = "max_steps"
+
+// mlflowRunDetails holds the MLflow run fields we surface in text mode: the run's
+// display name and its training-step progress. Progress is best-effort (many
+// runs log no step metrics), so HasSteps records whether Done/Total mean anything.
+type mlflowRunDetails struct {
+	Name     string
+	Done     int
+	Total    int
+	HasSteps bool
 }
 
-// fetchMLflowRunName fetches a run's MLflow run_name via the MLflow REST API,
-// returning "" if it can't be obtained. Best-effort, like the rest of the
-// MLflow enrichment.
-func fetchMLflowRunName(ctx context.Context, w *databricks.WorkspaceClient, mlflowRunID string) string {
+// fetchMLflowRun reads a run's name and step progress from the MLflow REST API,
+// returning a zero value on any failure. Both consumers (the MLflow Run label and
+// the progress bar) degrade gracefully when the data is missing, so this is
+// best-effort like the rest of the MLflow enrichment.
+//
+// Done is the highest `step` across the run's latest metrics; Total is the run's
+// `max_steps` parameter. HasSteps is true only when max_steps is a positive
+// integer, so callers can tell a real "0 of N" from "no step data".
+func fetchMLflowRun(ctx context.Context, w *databricks.WorkspaceClient, mlflowRunID string) mlflowRunDetails {
 	apiClient, err := client.New(w.Config)
 	if err != nil {
-		log.Debugf(ctx, "air get: could not build API client for MLflow run name: %v", err)
-		return ""
+		log.Debugf(ctx, "air get: could not build API client for MLflow run: %v", err)
+		return mlflowRunDetails{}
 	}
 	var out struct {
 		Run struct {
 			Info struct {
 				RunName string `json:"run_name"`
 			} `json:"info"`
+			Data struct {
+				Metrics []struct {
+					Step int64 `json:"step"`
+				} `json:"metrics"`
+				Params []struct {
+					Key   string `json:"key"`
+					Value string `json:"value"`
+				} `json:"params"`
+			} `json:"data"`
 		} `json:"run"`
 	}
 	err = apiClient.Do(ctx, http.MethodGet, "/api/2.0/mlflow/runs/get",
 		nil, nil, map[string]any{"run_id": mlflowRunID}, &out)
 	if err != nil {
-		log.Debugf(ctx, "air get: could not fetch MLflow run name: %v", err)
-		return ""
+		log.Debugf(ctx, "air get: could not fetch MLflow run: %v", err)
+		return mlflowRunDetails{}
 	}
-	return out.Run.Info.RunName
+
+	details := mlflowRunDetails{Name: out.Run.Info.RunName}
+	var maxStep int64
+	for _, m := range out.Run.Data.Metrics {
+		maxStep = max(maxStep, m.Step)
+	}
+	for _, p := range out.Run.Data.Params {
+		if p.Key != maxStepsParam {
+			continue
+		}
+		if total, err := strconv.Atoi(p.Value); err == nil && total > 0 {
+			details.Done = int(maxStep)
+			details.Total = total
+			details.HasSteps = true
+		}
+		break
+	}
+	return details
+}
+
+// mlflowRunLabel is the text shown for the MLflow Run cell: the run's name, or
+// "...{last 8 of run id}" when the name is unknown. Mirrors Python's
+// _get_mlflow_run_name (cli_display.py).
+func mlflowRunLabel(name, mlflowRunID string) string {
+	if name != "" {
+		return name
+	}
+	if len(mlflowRunID) > 8 {
+		return "..." + mlflowRunID[len(mlflowRunID)-8:]
+	}
+	return "..." + mlflowRunID
 }
