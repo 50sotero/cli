@@ -22,7 +22,7 @@ import (
 func PushResourcesState(ctx context.Context, b *bundle.Bundle, engine engine.EngineType) {
 	// When DMS is active, state is persisted per-operation to the server.
 	// No local state file to push.
-	if useDMS, _ := env.ManagedState(ctx); useDMS == "true" {
+	if useDMS, _ := env.RecordDeploymentHistory(ctx); useDMS == "true" {
 		return
 	}
 

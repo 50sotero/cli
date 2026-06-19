@@ -1,4 +1,4 @@
 Badness = "Uses local test server; enable on cloud once the deployment metadata service is in production"
 EnvMatrix.DATABRICKS_BUNDLE_ENGINE = ["direct"]
-EnvMatrix.DATABRICKS_BUNDLE_MANAGED_STATE = ["true"]
+EnvMatrix.DATABRICKS_BUNDLE_RECORD_DEPLOYMENT_HISTORY = ["true"]
 RecordRequests = true

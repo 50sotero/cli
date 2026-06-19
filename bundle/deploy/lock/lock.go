@@ -37,12 +37,12 @@ type DeploymentLock interface {
 }
 
 // NewDeploymentLock returns a DeploymentLock implementation based on the
-// current environment. If managed state is enabled and the goal maps to a
-// supported version type, a metadata service lock is returned. Otherwise,
-// a workspace filesystem lock is returned.
+// current environment. If deployment history recording is enabled and the goal
+// maps to a supported version type, a metadata service lock is returned.
+// Otherwise, a workspace filesystem lock is returned.
 func NewDeploymentLock(ctx context.Context, b *bundle.Bundle, goal Goal) DeploymentLock {
-	useManagedState, _ := env.ManagedState(ctx)
-	if useManagedState == "true" {
+	useDMS, _ := env.RecordDeploymentHistory(ctx)
+	if useDMS == "true" {
 		versionType, ok := goalToVersionType(goal)
 		if ok {
 			return newMetadataServiceLock(b, versionType)

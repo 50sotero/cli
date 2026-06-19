@@ -1,6 +1,6 @@
 Ignore = [".databricks"]
 EnvMatrix.DATABRICKS_BUNDLE_ENGINE = ["direct"]
-EnvMatrix.DATABRICKS_BUNDLE_MANAGED_STATE = ["true"]
+EnvMatrix.DATABRICKS_BUNDLE_RECORD_DEPLOYMENT_HISTORY = ["true"]
 RecordRequests = true
 
 [[Server]]

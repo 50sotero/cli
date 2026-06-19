@@ -222,7 +222,7 @@ func readStates(ctx context.Context, b *bundle.Bundle, alwaysPull AlwaysPull) []
 
 	// When DMS is enabled, read the deployment ID from workspace and return
 	// early. State is loaded from the server later via LoadStateFromDMS.
-	if useDMS, _ := env.ManagedState(ctx); useDMS == "true" {
+	if useDMS, _ := env.RecordDeploymentHistory(ctx); useDMS == "true" {
 		f, err := deploy.StateFiler(ctx, b)
 		if err != nil {
 			logdiag.LogError(ctx, err)
